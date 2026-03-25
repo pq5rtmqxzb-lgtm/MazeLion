@@ -10,7 +10,8 @@
 html,body{width:100%;height:100%;overflow:auto;background:#1a1a2e;
 touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 body{display:flex;flex-direction:column;align-items:center;
-font-family:-apple-system,'Segoe UI',sans-serif;color:#fff;padding:8px 0}
+font-family:-apple-system,'Segoe UI',sans-serif;color:#fff;
+padding:8px 0 calc(20px + env(safe-area-inset-bottom))}
 h1{font-size:1.3rem;color:#f5a623}
 #sub{font-size:.75rem;color:#4a6fa5;margin-bottom:2px}
 #hud{display:flex;gap:1rem;font-size:.9rem;margin-bottom:4px}
@@ -47,14 +48,15 @@ var scE=document.getElementById('sc'),lvE=document.getElementById('lv');
 var tmE=document.getElementById('tm'),mgE=document.getElementById('msg');
 
 // --- Determine canvas size from actual screen ---
-var scrW=Math.max(screen.width||375,window.innerWidth||375,document.documentElement.clientWidth||375);
-var scrH=Math.max(screen.height||667,window.innerHeight||667,document.documentElement.clientHeight||667);
-// Pick the smaller dimension to be safe; target ~90% width, maintain aspect ratio
+var scrW=Math.max(window.innerWidth||375,document.documentElement.clientWidth||375);
+var scrH=Math.max(window.innerHeight||667,document.documentElement.clientHeight||667);
+// Reserve: HUD ~50px, d-pad ~170px, message ~30px, Safari URL bar ~50px, padding ~30px
+var reserve=330;
 var aspect=21/31;
 var cW=Math.min(scrW-24, 460);
 var cH=Math.round(cW/aspect);
-if(cH>scrH*0.6){cH=Math.round(scrH*0.6);cW=Math.round(cH*aspect);}
-if(cW<200){cW=350;cH=520;} // absolute fallback
+if(cH>scrH-reserve){cH=Math.max(200,scrH-reserve);cW=Math.round(cH*aspect);}
+if(cW<200){cW=280;cH=414;} // absolute fallback
 
 cv.width=cW; cv.height=cH;
 cv.style.width=cW+'px'; cv.style.height=cH+'px';
