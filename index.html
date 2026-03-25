@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Leeuw Doolhof</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:auto;background:#1a1a2e;
+touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+body{display:flex;flex-direction:column;align-items:center;
+font-family:-apple-system,'Segoe UI',sans-serif;color:#fff;padding:8px 0}
+h1{font-size:1.3rem;color:#f5a623}
+#sub{font-size:.75rem;color:#4a6fa5;margin-bottom:2px}
+#hud{display:flex;gap:1rem;font-size:.9rem;margin-bottom:4px}
+#hud span{color:#f5a623;font-weight:bold}
+canvas{display:block;border:2px solid #f5a623;border-radius:6px;touch-action:none}
+#msg{margin-top:4px;font-size:.8rem;color:#aaa;text-align:center;padding:0 8px;min-height:1.1rem}
+#pad{display:none;margin-top:6px;position:relative;width:140px;height:140px}
+#pad button{position:absolute;width:44px;height:44px;border:2px solid #f5a623;
+background:rgba(245,166,35,.15);color:#f5a623;font-size:1.3rem;border-radius:10px;
+display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#pad button:active{background:rgba(245,166,35,.4)}
+.u{top:0;left:48px}.d{bottom:0;left:48px}.l{top:48px;left:0}.r{top:48px;right:0}
+.c{top:48px;left:48px;border-color:#666;background:rgba(100,100,100,.1);color:#666;font-size:.55rem}
+@media(pointer:coarse),(max-width:600px){#pad{display:block}}
+</style>
+</head>
+<body>
+<h1>Leeuw Doolhof</h1>
+<div id="sub">Euromast Rotterdam</div>
+<div id="hud">Score:<span id="sc">0</span> Level:<span id="lv">1</span> Tijd:<span id="tm">0</span>s</div>
+<canvas id="cv"></canvas>
+<div id="msg"></div>
+<div id="pad">
+<button class="u">&#9650;</button><button class="l">&#9664;</button>
+<button class="c">R</button><button class="r">&#9654;</button><button class="d">&#9660;</button>
+</div>
+<script>
+try{
+var cv=document.getElementById('cv'),c=cv.getContext('2d');
+var scE=document.getElementById('sc'),lvE=document.getElementById('lv');
+var tmE=document.getElementById('tm'),mgE=document.getElementById('msg');
+
+// --- Determine canvas size from actual screen ---
+var scrW=Math.max(screen.width||375,window.innerWidth||375,document.documentElement.clientWidth||375);
+var scrH=Math.max(screen.height||667,window.innerHeight||667,document.documentElement.clientHeight||667);
+// Pick the smaller dimension to be safe; target ~90% width, maintain aspect ratio
+var aspect=21/31;
+var cW=Math.min(scrW-24, 460);
+var cH=Math.round(cW/aspect);
+if(cH>scrH*0.6){cH=Math.round(scrH*0.6);cW=Math.round(cH*aspect);}
+if(cW<200){cW=350;cH=520;} // absolute fallback
+
+cv.width=cW; cv.height=cH;
+cv.style.width=cW+'px'; cv.style.height=cH+'px';
+
+var CO=21,RO=31;
+var CL=Math.floor(Math.min(cW/CO,cH/RO));
+var OX=Math.floor((cW-CO*CL)/2), OY=Math.floor((cH-RO*CL)/2);
+
+var mz,pl,cn,ex,sc,lv,ti,tI,go;
+
+// Shape mask
+var sm=[];
+(function(){
+var r,x;for(r=0;r<RO;r++){sm[r]=[];for(x=0;x<CO;x++)sm[r][x]=false;}
+function f(row,a,b){for(var i=a;i<=b;i++)sm[row][i]=true;}
+for(r=0;r<=2;r++)f(r,9,11);
+for(r=3;r<=8;r++)f(r,7,13);
+for(r=9;r<=12;r++)f(r,3,17);
+f(13,5,15);
+for(r=14;r<=24;r++)f(r,6,14);
+f(25,5,15);f(26,4,16);
+for(r=27;r<=30;r++)f(r,3,17);
+})();
+
+function genMaze(){
+var g=[],r,x;
+for(r=0;r<RO;r++){g[r]=[];for(x=0;x<CO;x++)g[r][x]={t:1,r:1,b:1,l:1,v:0,s:sm[r][x]?1:0};}
+var st=[[10,30]];g[30][10].v=1;
+while(st.length){
+var cur=st[st.length-1],cx=cur[0],cy=cur[1],nb=[];
+if(cy>0&&g[cy-1][cx].s&&!g[cy-1][cx].v)nb.push([cx,cy-1,0]);
+if(cx<CO-1&&g[cy][cx+1].s&&!g[cy][cx+1].v)nb.push([cx+1,cy,1]);
+if(cy<RO-1&&g[cy+1][cx].s&&!g[cy+1][cx].v)nb.push([cx,cy+1,2]);
+if(cx>0&&g[cy][cx-1].s&&!g[cy][cx-1].v)nb.push([cx-1,cy,3]);
+if(nb.length){
+var n=nb[Math.floor(Math.random()*nb.length)],nx=n[0],ny=n[1],d=n[2];
+if(d===0){g[cy][cx].t=0;g[ny][nx].b=0;}
+if(d===1){g[cy][cx].r=0;g[ny][nx].l=0;}
+if(d===2){g[cy][cx].b=0;g[ny][nx].t=0;}
+if(d===3){g[cy][cx].l=0;g[ny][nx].r=0;}
+g[ny][nx].v=1;st.push([nx,ny]);
+}else st.pop();
+}return g;}
+
+function pCoins(cnt){
+var cells=[],y,x;
+for(y=0;y<RO;y++)for(x=0;x<CO;x++)
+if(sm[y][x]&&!(x===pl.x&&y===pl.y)&&!(x===ex.x&&y===ex.y))cells.push({x:x,y:y});
+var p=[];while(p.length<cnt&&cells.length){var i=Math.floor(Math.random()*cells.length);
+var cc=cells.splice(i,1)[0];p.push({x:cc.x,y:cc.y,d:0});}return p;}
+
+function sLv(){
+mz=genMaze();pl={x:10,y:30};ex={x:10,y:0};
+cn=pCoins(5+lv*3);lvE.textContent=lv;
+mgE.textContent='Level '+lv+' - Beklim de Euromast!';dr();}
+
+function init(){
+sc=0;lv=1;ti=0;go=0;
+if(tI)clearInterval(tI);
+sLv();
+tI=setInterval(function(){if(!go){ti++;tmE.textContent=ti;}},1000);
+}
+
+function dLion(cx,cy,s){
+c.fillStyle='#c87533';c.beginPath();c.arc(cx,cy,s*.45,0,6.28);c.fill();
+c.fillStyle='#b5651d';
+for(var i=0;i<8;i++){var a=i/8*6.28;c.beginPath();c.arc(cx+Math.cos(a)*s*.38,cy+Math.sin(a)*s*.38,s*.15,0,6.28);c.fill();}
+c.fillStyle='#f5a623';c.beginPath();c.arc(cx,cy,s*.3,0,6.28);c.fill();
+c.fillStyle='#c87533';c.beginPath();c.arc(cx-s*.2,cy-s*.25,s*.08,0,6.28);c.fill();
+c.beginPath();c.arc(cx+s*.2,cy-s*.25,s*.08,0,6.28);c.fill();
+c.fillStyle='#1a1a2e';c.beginPath();c.arc(cx-s*.1,cy-s*.05,s*.045,0,6.28);c.fill();
+c.beginPath();c.arc(cx+s*.1,cy-s*.05,s*.045,0,6.28);c.fill();
+c.fillStyle='#8B4513';c.beginPath();c.arc(cx,cy+s*.08,s*.04,0,6.28);c.fill();}
+
+function dr(){
+c.clearRect(0,0,cW,cH);
+var gr=c.createLinearGradient(0,0,0,cH);
+gr.addColorStop(0,'#0d1b2a');gr.addColorStop(.5,'#1b2838');gr.addColorStop(1,'#162447');
+c.fillStyle=gr;c.fillRect(0,0,cW,cH);
+// Stars
+c.fillStyle='rgba(255,255,255,.4)';
+for(var i=0;i<30;i++)c.fillRect((Math.sin(i*127.1)*.5+.5)*cW,(Math.cos(i*311.7)*.5+.5)*cH*.4,2,2);
+// Euromast fill
+c.fillStyle='#1e2d4a';
+for(var y=0;y<RO;y++)for(var x=0;x<CO;x++)if(sm[y][x])c.fillRect(OX+x*CL,OY+y*CL,CL+1,CL+1);
+// Walls
+c.strokeStyle='#4a8fcc';c.lineWidth=Math.max(1,CL*.1);
+for(var y=0;y<RO;y++)for(var x=0;x<CO;x++){
+if(!sm[y][x])continue;var cl=mz[y][x],px=OX+x*CL,py=OY+y*CL;
+if(cl.t){c.beginPath();c.moveTo(px,py);c.lineTo(px+CL,py);c.stroke();}
+if(cl.r){c.beginPath();c.moveTo(px+CL,py);c.lineTo(px+CL,py+CL);c.stroke();}
+if(cl.b){c.beginPath();c.moveTo(px,py+CL);c.lineTo(px+CL,py+CL);c.stroke();}
+if(cl.l){c.beginPath();c.moveTo(px,py);c.lineTo(px,py+CL);c.stroke();}}
+// Exit
+var ep=OX+ex.x*CL,eq=OY+ex.y*CL;
+c.fillStyle='rgba(46,204,113,.3)';c.beginPath();c.arc(ep+CL/2,eq+CL/2,CL*.8,0,6.28);c.fill();
+c.fillStyle='#2ecc71';c.fillRect(ep+2,eq+2,CL-4,CL-4);
+c.fillStyle='#fff';c.font='bold '+Math.max(7,CL*.32)+'px sans-serif';c.textAlign='center';c.textBaseline='middle';
+c.fillText('TOP',ep+CL/2,eq+CL/2);
+// Coins
+for(var i=0;i<cn.length;i++){var co=cn[i];if(co.d)continue;
+var cx2=OX+co.x*CL+CL/2,cy2=OY+co.y*CL+CL/2;
+c.fillStyle='rgba(255,215,0,.25)';c.beginPath();c.arc(cx2,cy2,CL*.35,0,6.28);c.fill();
+c.fillStyle='#ffd700';c.beginPath();c.arc(cx2,cy2,CL*.2,0,6.28);c.fill();
+c.fillStyle='#b8860b';c.font='bold '+Math.max(6,CL*.22)+'px sans-serif';c.textAlign='center';c.textBaseline='middle';
+c.fillText('$',cx2,cy2+1);}
+// Lion
+dLion(OX+pl.x*CL+CL/2,OY+pl.y*CL+CL/2,CL);
+scE.textContent=sc;}
+
+function canM(d){
+var cl=mz[pl.y][pl.x],nx=pl.x,ny=pl.y;
+if(d===0){if(cl.t)return 0;ny--;}if(d===1){if(cl.r)return 0;nx++;}
+if(d===2){if(cl.b)return 0;ny++;}if(d===3){if(cl.l)return 0;nx--;}
+if(ny<0||ny>=RO||nx<0||nx>=CO)return 0;return sm[ny][nx]?1:0;}
+
+function mv(d){
+if(go)return;if(!canM(d))return;
+if(d===0)pl.y--;if(d===1)pl.x++;if(d===2)pl.y++;if(d===3)pl.x--;
+for(var i=0;i<cn.length;i++)if(!cn[i].d&&cn[i].x===pl.x&&cn[i].y===pl.y){cn[i].d=1;sc+=10*lv;}
+if(pl.x===ex.x&&pl.y===ex.y){
+var bo=Math.max(0,200-ti*2)*lv;sc+=bo+50*lv;
+mgE.textContent='Level '+lv+' gehaald! +'+(bo+50*lv)+' bonus!';
+lv++;if(lv>5){go=1;clearInterval(tI);mgE.textContent='Gewonnen! Score:'+sc+' ('+ti+'s) Tik R!';}
+else sLv();}dr();}
+
+// Keyboard
+document.addEventListener('keydown',function(e){
+var k=e.key;
+if(k==='ArrowUp'||k==='w'||k==='W'){e.preventDefault();mv(0);}
+if(k==='ArrowRight'||k==='d'||k==='D'){e.preventDefault();mv(1);}
+if(k==='ArrowDown'||k==='s'||k==='S'){e.preventDefault();mv(2);}
+if(k==='ArrowLeft'||k==='a'||k==='A'){e.preventDefault();mv(3);}
+if(k==='r'||k==='R')init();});
+
+// D-pad
+var pad=document.getElementById('pad');
+function aB(s,fn){var b=pad.querySelector('.'+s);
+b.ontouchstart=function(e){e.preventDefault();e.stopPropagation();fn();};
+b.onmousedown=function(e){e.preventDefault();fn();};}
+aB('u',function(){mv(0);});aB('r',function(){mv(1);});
+aB('d',function(){mv(2);});aB('l',function(){mv(3);});
+aB('c',function(){init();});
+
+// Swipe
+var sx=0,sy=0,st=0;
+cv.ontouchstart=function(e){e.preventDefault();st=1;sx=e.touches[0].clientX;sy=e.touches[0].clientY;};
+cv.ontouchmove=function(e){e.preventDefault();};
+cv.ontouchend=function(e){e.preventDefault();if(!st)return;st=0;
+var dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+if(Math.abs(dx)<10&&Math.abs(dy)<10)return;
+if(Math.abs(dx)>Math.abs(dy))mv(dx>0?1:3);else mv(dy>0?2:0);};
+
+document.ontouchmove=function(e){e.preventDefault();};
+
+init();
+mgE.textContent='Level 1 - Beklim de Euromast!';
+
+}catch(err){
+document.getElementById('msg').textContent='Fout: '+err.message;
+document.getElementById('msg').style.color='#ff4444';
+}
+</script>
+</body>
+</html>
